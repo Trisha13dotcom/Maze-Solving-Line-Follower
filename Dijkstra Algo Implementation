@@ -1,0 +1,178 @@
+#include<stdio.h>
+
+#define INFINITY 9999
+int n; //Number of nodes present in the graph or the number of junctions in our maze
+
+void dijkstra(int n, int AdjMat[n][n], int start_node,int dest_node)
+{
+    int len[n][n];
+  //Converting the normal adjacency matrix to len matrix where length of INFINITY from one node will mean that there is no path existing between the two nodes
+  for(int i=0;i<n;i++)
+  {
+    for(int j=0; j<n;j++)
+    {
+        if(AdjMat[i][j]==0 && i!=j)
+        {
+            len[i][j]= INFINITY;
+        }
+        else
+        {
+            len[i][j]= AdjMat[i][j];
+        }
+    }
+  }
+
+  int new_node=start_node;
+  int prev_node=start_node;
+  int flag_explored[n];
+  for(int i=0;i<n;i++)
+  {
+    if(i==start_node)
+    {
+        flag_explored[i]=1;
+    }
+    else
+    {
+        flag_explored[i]=0;
+    }
+  }
+
+  int dist[n];
+   //Initially the new_node and the prev_node will be the first node(0 or the starting point)
+  //The distance array should be initialised such that the distance corresponding to each of the other nodes except the first one is INFINITY
+  for(int i=0;i<n;i++)
+  {
+    if(i==start_node)
+    {
+        dist[i]=0;
+    }
+    else
+    {
+        dist[i]=INFINITY;
+    }
+  }
+
+  int pred_array[n];
+  for(int i=0;i<n;i++)
+  {
+    pred_array[i]=-1;
+  }
+
+  while(1)
+  {
+    if(new_node==dest_node)
+    {
+        break;
+    }
+    else
+      {
+      int least_distance = INFINITY;
+      //Updating the distances of the neighbours of all the unexplored neighbours of the new_node
+      for(int w=0; w<n;w++)
+      {
+        if(len[new_node][w]!= INFINITY && flag_explored[w]==0)
+        {
+         if(dist[w]> dist[new_node]+len[new_node][w])
+          { 
+            dist[w]= dist[new_node]+len[new_node][w];
+            pred_array[w] = new_node;
+          }
+        }
+      }
+  
+    prev_node = new_node;
+
+    //Choosing the next node to be explored from the distance array
+    //Check for the node which has least distance among all the unexplored nodes
+    for(int i=0;i<n;i++)
+    {
+      if(dist[i]<least_distance && flag_explored[i]==0)
+      {
+          new_node = i;
+          least_distance= dist[i];
+      }
+      
+    }
+
+     if (least_distance == INFINITY)
+    {
+    printf("Destination is not reachable\n");
+    break;
+    }
+    flag_explored[new_node]=1;
+   
+
+  }
+
+}
+
+ 
+ int j=0;
+ //Initialise the elements of the array to -1, after the array has been updated, count the number of nodes to reach the shortest path
+ int finding_path[n];
+ for(int i=0;i<n;i++)
+ {
+  finding_path[i]=-1;
+ }
+  //Finding the final shortest path from the start node to the destination node
+  int d= dest_node;
+  while(d!=start_node)
+  {
+    finding_path[j]=d;
+    d= pred_array[d];
+    j++;
+  }
+  int final_path[j];
+  
+  for(int i=0;i<j;i++)
+  {
+    final_path[i]=finding_path[j-i-1];
+  }
+}
+
+
+//We will try getting the adjacency matrix first and then accordingly make the changes as soon as the mapping algo is done
+void getMatrix()
+{
+  printf("Enter the number of nodes in the graph");
+  scanf("%d",&n);
+
+  int AdjMat[n][n];
+
+  printf("Enter the elements of the adjacency matrix");
+  int i,j;
+  for(i=0;i<n;i++)
+  {
+    for(j=0;j<n;j++)
+    {
+      printf("Enter the element present at %d row and %d column",i+1,j+1);
+      scanf("%d",&AdjMat[i][j]);
+    }
+  }
+
+  //Printing the Adjacency matrix
+  for(i=0;i<n;i++)
+  {
+    for(j=0;j<n;j++)
+    {
+        printf("%d",AdjMat[i][j]);
+        printf("\t");
+    }
+    printf("\n");
+  }
+
+  int start_node, dest_node;
+  printf("Please enter the starting_node");
+  scanf("%d",&start_node);
+  
+  printf("Please enter the destination node");
+  scanf("%d",&dest_node);
+
+  dijkstra(n, AdjMat, start_node, dest_node);
+}
+
+int main()
+{
+    getMatrix();
+    return 0;
+}
