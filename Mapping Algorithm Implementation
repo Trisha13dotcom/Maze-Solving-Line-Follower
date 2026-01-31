@@ -1,0 +1,359 @@
+#include<stdio.h>
+#include<math.h>
+#include<stdbool.h>
+
+//Normal GPIO digital pins for motor direction control
+#define R_F 23
+#define R_B 5
+#define L_F 27
+#define L_B 4
+
+//State array
+int s_state[9];
+
+//Defining the elements of the array is a problem because we dont the know the number of nodes beforehand(obv)
+//Either use dynamic memory allocation or just define max node size to be 50 or smth because you know its not going to go beyond that
+//Dynamic memory allocation increases the complexity is the prob
+
+#define max_node 50
+#define INFINITY 9999
+
+//Direction updation
+#define Turn_pwm 500
+#define U_turn_pwm 700
+
+//Encoder readings defined for now
+float left_enc_prev;
+float right_enc_prev;
+float left_enc_curr;
+float right_enc_curr;
+
+float avg_dist = ((left_enc_curr-left_enc_prev) +(left_enc_curr-left_enc_prev))/2;
+
+// 1 dimensional arrays
+int point_array[max_node];
+int type_array[max_node];
+int explored_array[max_node];
+
+// 2 dimesional arrays
+float coord_array[max_node][2];
+int visit_dir[max_node][4];
+int temp_coord[1][2];
+
+//Variables 
+int direction;
+int total_points =0;
+int node_point =0; //For keeping track of the point array indexing 
+
+  /* Working with absolute directions 
+Assigning North as 0
+East as 1 
+South as 2
+West as 3 */
+typedef enum {
+    NORTH = 0,
+    EAST  = 1,
+    SOUTH = 2,
+    WEST  = 3
+} Direction;
+
+//Setting the current direction
+Direction current_dir = NORTH;
+
+void motor_drive_f(int l_pwm, int r_pwm)
+{
+    gpio_set_level(L_F, 1);
+    gpio_set_level(L_B, 0);
+
+    gpio_set_level(R_F, 1);
+    gpio_set_level(R_B, 0);
+
+    motor_drive(l_pwm, r_pwm);
+}
+void motor_drive_r(int speed)
+{
+    gpio_set_level(L_F, 1);   
+    gpio_set_level(L_B, 0);
+
+    gpio_set_level(R_F, 0);   
+    gpio_set_level(R_B, 1);
+
+    motor_drive(speed, speed);
+}
+
+void motor_drive_l(int speed)
+{
+
+    gpio_set_level(L_F, 0);   
+    gpio_set_level(L_B, 1);
+
+    gpio_set_level(R_F, 1);   
+    gpio_set_level(R_B, 0);
+
+    motor_drive(speed, speed);
+}
+
+void motor_drive_u(int speed)
+{
+    gpio_set_level(L_F, 0);   
+    gpio_set_level(L_B, 1);
+
+    gpio_set_level(R_F, 1);  
+    gpio_set_level(R_B, 0);
+
+    motor_drive(speed, speed);
+}
+
+
+int compare_point(float x1, float y1, float x2, float y2, float tolerance)
+  {
+    if (fabs(x1 - x2) <= tolerance && fabs(y1 - y2) <= tolerance)
+    {
+     return 1;
+    }
+    else
+    {
+      return 0;
+    } 
+  }
+
+//Taking in account the opposite direction(with respect to the node)
+  int opposite_direction(int d)
+  {
+    if(d == 0) return 2;   // north changes to south
+    if(d == 1) return 3;   // east changes to west
+    if(d == 2) return 0;   // south changes to north
+    if(d == 3) return 1;   // west changes to east
+    return -1;
+  }
+
+
+int main()
+{
+    for(int i=0;i<50;i++)
+    {
+      explored_array[i]=0;
+    }
+} 
+
+
+void update_array(int type)
+{
+  if(direction==0)
+  {
+    temp_coord[0][1]= temp_coord[0][1]+ avg_dist;
+  }
+  else if(direction==1)
+  {
+    temp_coord[0][0]= temp_coord[0][0]+ avg_dist;
+  }
+  else if(direction==2)
+  {
+    temp_coord[0][1]= temp_coord[0][1]- avg_dist;
+  }
+  else if(direction==3)
+  {
+    temp_coord[0][0]= temp_coord[0][0]- avg_dist;
+  }
+
+  int entry_dir = opposite_direction(direction);
+
+  //Checkimg the temp coordinates with the coordinate array to check if the point exists already
+  //Define the tolerance based on the experimental values obtained
+  int found_node= -1;
+  for(int i=0;i<total_points;i++)
+  {
+    if(compare_point(temp_coord[0][0], temp_coord[0][1], coord_array[i][0], coord_array[i][1], 3.0))
+    {
+        found_node = i;
+        break;
+    }
+}
+
+
+  //New node condition
+  /* If new node is found, the following changes are to be made
+  1. Increase the total_points number and node_point
+  2. Will change the value of the index=node_point in the point_array to the point_number
+  3. Save the type of the point in the point array
+  4. Save the way it has been explored in the explored array
+  5. Update the coordinate array with the coordinates of the new node */
+  if(found_node == -1)
+  {
+    total_points = total_points + 1;
+    node_point = node_point + 1;
+    point_array[node_point]= total_points;
+    type_array[total_points]= type;
+    explored_array[total_points]= explored_array[total_points]+1;
+
+    //Saving the way it has been explored
+    visit_dir[total_points][entry_dir]=1;
+
+    //Updating the coordinates
+    coord_array[total_points][0]=temp_coord[0][0];
+    coord_array[total_points][1]=temp_coord[0][1];
+  }
+
+  //Old node condition
+  /* If its an already existing node, the following changes are to be made
+  1.Increase node_point by 1
+  2.Store the point in the point_array having index= node_point
+  3.Check through the explored array to see the path it has taken 
+  if its a new path update that in the explored array */
+  else
+  {
+    node_point=node_point+1;
+    point_array[node_point]=found_node;
+    
+    //Checking if the path has already been explored
+    if(visit_dir[found_node][entry_dir]==1)
+    {
+      printf("Path already explored");
+    }
+    else
+    {
+      explored_array[found_node]= explored_array[found_node]+1;
+      visit_dir[found_node][entry_dir]=1;
+    }
+  }
+
+  // Deciding the next path to take
+  void update_direction(int turn_type)
+{
+    // turn_type:
+    // 0 = dead end (reverse turn)
+    // 1 = left or right (detected by sensors)
+    // -1 = straight (no change)
+
+
+    // Dead end  reverse (180 degree turn)
+    if (turn_type == 0)
+    {
+        current_dir = (current_dir + 2) % 4;
+        return;
+    }
+
+    // turn_type == 1 : we must check WHICH side caused it
+    bool left_junc  = (s_state[0] > 2000 && s_state[1] > 2000);
+    bool right_junc = (s_state[7] > 2000 && s_state[8] > 2000);
+
+    if (left_junc)
+    {
+        // turn left  anticlockwise
+        current_dir = (current_dir + 3) % 4;
+    }
+    else if (right_junc)
+    {
+        // turn right  clockwise
+        current_dir = (current_dir + 1) % 4;
+    }
+}
+
+
+void special_response()
+{
+    bool straight_path = (s_state[3] > 2000 && s_state[5] > 2000 && s_state[2] > 2000 && s_state[6] >> 2000);
+    bit_backward(150);
+    vTaskDelay(pdMS_TO_TICKS(2000));
+    update_sensors();
+    bool left_path     = (s_state[0] > 2000 || s_state[1] > 2000);
+    bool right_path    = (s_state[7] > 2000 || s_state[8] > 2000);
+
+    // Convert local paths absolute world directions
+    bool can_go[4] = {false, false, false, false};
+    // 0:NORTH, 1:EAST, 2:SOUTH, 3:WEST
+
+    // Straight
+    if (straight_path)
+        can_go[current_dir] = true;
+
+    // Left turn
+    if (left_path)
+        can_go[(current_dir + 3) % 4] = true;
+
+    // Right turn
+    if (right_path)
+        can_go[(current_dir + 1) % 4] = true;
+
+    // Priority order: EAST  NORTH  WEST  SOUTH
+    int priority[4] = {EAST, NORTH, WEST, SOUTH};
+
+    int chosen_dir = -1;
+
+    for (int i = 0; i < 4; i++)
+    {
+        if (can_go[priority[i]])
+        {
+            chosen_dir = priority[i];
+            break;
+        }
+    }
+
+    // SAFETY: if nothing detected (should never happen)
+    if (chosen_dir == -1)
+        return;
+
+    // Decide turn type based on chosen direction
+    int turn = (chosen_dir - current_dir + 4) % 4;
+    // 0 = straight
+    // 1 = right
+    // 2 = U-turn
+    // 3 = left
+
+    if (turn == 0)
+    {
+      vTaskDelay(pdMS_TO_TICKS(70));
+      motor_drive_f(l_pwm,r_pwm);
+    }
+    else if (turn == 1)
+    {
+      motor_drive_r(Turn_pwm);
+      vTaskDelay(pdMS_TO_TICKS(3000));
+    }
+  
+    else if (turn == 3)
+    {   
+        motor_drive_l(Turn_pwm);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+      }
+    else if (turn == 2)
+    {
+        motor_drive_u(U_turn_pwm);
+        vTaskDelay(pdMS_TO_TICKS(2000));
+    }
+
+    // Update current direction
+    current_dir = chosen_dir;
+}
+ 
+
+void junction_response(int j)
+{
+    if (j == 0)     // Dead end
+    {   
+        motor_drive_u(U_turn_pwm);
+        vTaskDelay(pdMS_TO_TICKS(800));
+    }
+    else if (j == 1)    // Pure left OR pure right
+    { 
+        // Priority-based decision
+        if (s_state[0] > 2000 && s_state[1] > 2000)
+            motor_drive_l(Turn_pwm);
+        else
+            motor_drive_r(Turn_pwm);
+
+    }
+    
+    else if (j==2)
+    {
+        special_response();
+    }
+  
+    else if (j==3)
+    {
+        special_response();
+    }
+    
+}
+  
+}
